@@ -14,6 +14,7 @@ from ocpp.v16.enums import (Action,
     ChargePointStatus,
     DataTransferStatus,
     RegistrationStatus,
+    ChargePointErrorCode,
     ResetStatus,
     ResetType,)
 from ocpp.v16.datatypes import IdTagInfo
@@ -30,7 +31,7 @@ class ChargePoint(cp):
     @on(Action.Authorize)
     def on_authorize(self, **kwargs):
         id_tag_info = IdTagInfo(status=AuthorizationStatus.accepted)
-        return call_result.AuthorizePayload(id_tag_info=id_tag_info)
+        return call_result.Authorize(id_tag_info=id_tag_info)
 
     @on(Action.BootNotification)
     def on_boot_notification(
@@ -39,7 +40,7 @@ class ChargePoint(cp):
         charge_point_model: str,
         **kwargs
     ):
-        return call_result.BootNotificationPayload (
+        return call_result.BootNotification (
             current_time=datetime.utcnow().isoformat(),
             interval=900,
             status=RegistrationStatus.accepted,
@@ -70,9 +71,8 @@ class ChargePoint(cp):
         status: ChargePointStatus,
         **kwargs
     ):
-        return call_result.StatusNotificationPayload(
-           
-        )
+        return call_result.StatusNotification()
+    
 
     @on(Action.StartTransaction)
  
@@ -81,13 +81,28 @@ class ChargePoint(cp):
         transaction_id = transaction_ids.get(charge_point_id, 1)
         
         id_tag_info = IdTagInfo(status=AuthorizationStatus.accepted)
-        return call_result.StartTransactionPayload(transaction_id=transaction_id,
+        return call_result.StartTransaction(transaction_id=transaction_id,
                                             id_tag_info=id_tag_info)
+
+    @on(Action.RemoteStartTransaction)
+    def remote_start_transaction(self,**kwargs):
+        status = call_result.RemoteStartStopStatus.rejected
+        return call_result.RemoteStartTransaction(status=status)
+    
+    @on(Action.RemoteStopTransaction)
+    def remote_stop_transaction(self,**kwargs):
+        return call_result.RemoteStartStopStatus.accepted
 
     @on(Action.StopTransaction)
     def on_stop_transaction(self, **kwargs):
-        return call_result.StopTransactionPayload()
+        id_tag_info=IdTagInfo(status=AuthorizationStatus.accepted)
+        return call_result.StopTransaction(
+            id_tag_info=id_tag_info
+
+        )
    
+   
+
     async def request_reset(self, **kwargs):
         request = call.Reset(ResetType.hard)
         response = await self.call(request)
@@ -104,7 +119,7 @@ class ChargePoint(cp):
         return await self.call(payload)
     
     async def request_remote_start_transaction(self, connector_id: int, id_tag: str, charging_profile: dict = None):
-            payload = call.RemoteStartTransactionPayload(
+            payload = call.RemoteStartTransaction(
               
                 connector_id=connector_id,
                 id_tag=id_tag,
@@ -114,12 +129,19 @@ class ChargePoint(cp):
             print(payload)
             response = await self.call(payload)
             if response.status != 'Accepted':
-                raise Exception(f"Failed to start transaction: {response.status}")
+                raise Exception(f"Failed to Remote start transaction: {response.status}")
             return response
 
-    async def request_remote_stop_transaction(self, **kwargs):
-        payload = call.RemoteStopTransaction(**kwargs)
-        return await self.call(payload)
+    async def request_remote_stop_transaction(self,transaction_id: int, **kwargs):
+            payload = call.RemoteStopTransaction(
+                transaction_id=transaction_id
+            )
+            response =  await self.call(payload)
+            if response.status != 'Accepted':
+                raise Exception(f"Failed to remote stop transaction: {response.status}")
+            return response
+
+    
 
     async def request_update_firmware(self, **kwargs):
         payload = call.UpdateFirmware(**kwargs)
@@ -169,7 +191,7 @@ app = FastAPI()
 
 
 @app.post("/{charge_point_id}/remote_start_transaction")
-async def remote_start_transaction(request: RemoteStartTransactionRequest, charge_point_id: str = Path(..., description="ID of the charge point")):
+async def remote_start_transaction(request: RemoteStartTransactionRequest,  charge_point_id: str = Path(..., description="ID of the charge point")):
      # Replace with your logic to get the charge point ID
     if charge_point_id not in charge_points:
         raise HTTPException(status_code=404, detail="Charge point not connected")
@@ -187,6 +209,22 @@ async def remote_start_transaction(request: RemoteStartTransactionRequest, charg
         charging_profile=request.charging_profile
     )
     return {"message": "Remote start transaction requested"}
+
+@app.get("/{charge_point_id}/remote_stop_transaction")
+async def remote_stop_transaction(
+     charge_point_id: str = Path(...)
+):
+    if charge_point_id not in charge_points:
+        raise HTTPException(status_code=404, detail="Charge point not connected")
+
+    cp = charge_points[charge_point_id]
+    transaction_id = transaction_ids.get(charge_point_id, 1)
+
+    await cp.request_remote_stop_transaction(
+        transaction_id=transaction_id
+    )
+    return {"message": "Remote start transaction requested"}
+
 
 @app.post("/{charge_point_id}/limitkWh")
 async def limit_kWh(request: ChargingProfileRequest, charge_point_id: str = Path(...)):
