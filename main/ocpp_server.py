@@ -97,11 +97,22 @@ async def on_connect(websocket, path):
                         websocket.available_subprotocols, requested_protocols)
         return await websocket.close()
 
-    charge_point_id = path.strip("/ocpp")
+    path_parts = path.strip("/").split("/")
+    if len(path_parts) != 2:
+        logging.error("Invalid path format. Closing Connection")
+        return await websocket.close()
+    
+    user_id = path_parts[0]
+    charge_point_id = path_parts[1]
+
     cp = ChargePoint(charge_point_id, websocket)
-    charge_points[charge_point_id] = cp
-    logging.info(f"Charge point {charge_point_id} connected")
-    logging.info(f"Current charge points: {list(charge_points.keys())}")
+    if user_id not in charge_points:
+        charge_points[user_id] = {}
+    charge_points[user_id][charge_point_id] = cp
+
+    logging.info(f"Charge point {charge_point_id} connected under user {user_id}")
+    logging.info(f"Current charge points for user {user_id}: {list(charge_points[user_id].keys())}")
+
     await cp.start()
 
 async def start_websocket_server():

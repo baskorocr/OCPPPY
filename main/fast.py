@@ -8,13 +8,13 @@ from ocpp_server import charge_points, transaction_ids, ChargePoint, start_webso
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
-@app.post("/{charge_point_id}/remote_start_transaction")
-async def remote_start_transaction(request: RemoteStartTransactionRequest, charge_point_id: str = Path(..., description="ID of the charge point")):
+@app.post("/{user_id}/{charge_point_id}/remote_start_transaction")
+async def remote_start_transaction(request: RemoteStartTransactionRequest, charge_point_id: str = Path(..., description="ID of the charge point"), user_id: str = Path(..., description="ID of the user")):
     logging.info(f"Charge Points: {charge_points}")
-    if charge_point_id not in charge_points:
+    if charge_point_id not in charge_points and charge_point_id not in charge_points[user_id]:
         raise HTTPException(status_code=404, detail="Charge point not connected")
 
-    cp = charge_points[charge_point_id]
+    cp = charge_points[user_id][charge_point_id]
     logging.info(f"Charge Point Object: {cp}")
 
     transaction_id = request.charging_profile.get("transactionId", None)
@@ -27,6 +27,16 @@ async def remote_start_transaction(request: RemoteStartTransactionRequest, charg
         charging_profile=request.charging_profile
     )
     return {"message": "Remote start transaction requested"}
+
+@app.get("/{user_id}/count_charge_points")
+async def count_charge_points(user_id: str = Path(..., description="ID of the user")):
+    if user_id not in charge_points:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    charge_point_count = len(charge_points[user_id])
+    logging.info(f"User {user_id} has {charge_point_count} charge points connected")
+
+    return {"user_id": user_id, "charge_point_count": charge_point_count}
 
 @app.get("/{charge_point_id}/remote_stop_transaction")
 async def remote_stop_transaction(charge_point_id: str = Path(...)):
