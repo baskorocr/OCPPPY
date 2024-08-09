@@ -64,7 +64,7 @@ async def main():
     # Start the WebSocket server
     loop.create_task(start_websocket_server())
     # Run FastAPI application
-    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
+    config = uvicorn.Config(app, host="0.0.0.0", port=7000, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
