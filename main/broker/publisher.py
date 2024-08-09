@@ -1,9 +1,22 @@
 import paho.mqtt. client as mqtt
+from dotenv import load_dotenv
+import os
 
-MQTT_BROKER = 'localhost'
-MQTT_PORT = 1883
-MQTT_USERNAME = 'baskorocr'
-MQTT_PASSWORD = 'baskorocr'
+load_dotenv(dotenv_path='../.env')
+
+MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_PORT = int(os.getenv('MQTT_PORT'))
+MQTT_USERNAME = os.getenv('MQTT_USERNAME')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+
+print(f"MQTT_BROKER: {MQTT_BROKER}")
+print(f"MQTT_PORT: {MQTT_PORT}")
+print(f"MQTT_USERNAME: {MQTT_USERNAME}")
+print(f"MQTT_PASSWORD: {MQTT_PASSWORD}")
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected with result code {rc}")
+
 
 mqtt_client = mqtt.Client()
 
